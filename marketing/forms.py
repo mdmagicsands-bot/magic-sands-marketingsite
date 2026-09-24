@@ -100,6 +100,17 @@ class TestimonialForm(forms.ModelForm):
             "rating": forms.NumberInput(attrs={"min": 1, "max": 5}),
         }
 
+    remove_photo = forms.BooleanField(required=False, label="Remove uploaded photo")
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        if self.cleaned_data.get("remove_photo") and not self.cleaned_data.get("image"):
+            obj.photo = None
+            obj.photo_content_type = ""
+        if commit:
+            obj.save()
+        return obj
+
 
 class PublicReviewForm(forms.Form):
     """Public submit-your-review form (Hostinger parity)."""

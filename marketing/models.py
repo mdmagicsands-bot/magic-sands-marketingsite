@@ -91,6 +91,10 @@ class Testimonial(models.Model):
         help_text="Static path under ms/, e.g. uploads/testimonial/t1.jpg",
     )
     image = models.ImageField(upload_to="testimonials/", blank=True, null=True)
+    # Uploaded photos live in the database: Railway's container disk is wiped on
+    # every deploy and /media/ is not served when DEBUG is off.
+    photo = models.BinaryField(blank=True, null=True, editable=False)
+    photo_content_type = models.CharField(max_length=40, blank=True, editable=False)
     date_from = models.DateField(blank=True, null=True)
     date_to = models.DateField(blank=True, null=True)
     sort_order = models.PositiveIntegerField(default=0)
@@ -105,6 +109,15 @@ class Testimonial(models.Model):
 
     def __str__(self):
         return f"{self.name}: {self.quote[:48]}"
+
+    def save(self, *args, **kwargs):
+        # Move a freshly uploaded image into the database instead of MEDIA_ROOT.
+        if self.image and not self.image._committed:
+            from .photos import compress_photo
+
+            self.photo, self.photo_content_type = compress_photo(self.image.file)
+            self.image = None
+        super().save(*args, **kwargs)
 
     def sync_role_from_dates(self):
         """Keep role in sync with travel dates for public templates."""

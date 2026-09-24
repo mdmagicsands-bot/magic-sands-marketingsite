@@ -155,8 +155,11 @@ class Command(BaseCommand):
                 "sort_order": i,
                 "is_published": True,
             }
+            # Guest submissions always carry travel dates; canonical rows never do, so a
+            # guest who shares a canonical name is not overwritten on deploy.
             obj, created = Testimonial.objects.update_or_create(
                 name=t["name"],
+                date_from__isnull=True,
                 defaults=defaults,
             )
             synced += 1
