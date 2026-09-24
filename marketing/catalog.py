@@ -1,5 +1,7 @@
 """Resolve public marketing content from the CMS database, with static fallbacks."""
 
+from django.urls import reverse
+
 from . import content
 from .assets import ms, resolve_ms_url
 from .models import (
@@ -30,19 +32,25 @@ def _resolve_testimonial_row(row, *, fallback=None):
         role = row.role
         rating = int(getattr(row, "rating", None) or fb.get("rating") or 5)
         raw_image = getattr(row, "image_path", "") or fb.get("image") or fb.get("image_path")
-        uploaded = getattr(row, "image", None)
-        if uploaded:
+        photo_url = None
+        if getattr(row, "photo_content_type", ""):
+            photo_url = reverse("testimonial_photo", args=[row.pk])
+        else:
+            # Legacy disk uploads: skip files lost on redeploy instead of rendering a broken image.
+            uploaded = getattr(row, "image", None)
             try:
-                if uploaded.name:
-                    return {
-                        "quote": quote,
-                        "name": name,
-                        "role": role,
-                        "image": uploaded.url,
-                        "rating": max(1, min(5, rating)),
-                    }
-            except ValueError:
+                if uploaded and uploaded.name and uploaded.storage.exists(uploaded.name):
+                    photo_url = uploaded.url
+            except (ValueError, OSError):
                 pass
+        if photo_url:
+            return {
+                "quote": quote,
+                "name": name,
+                "role": role,
+                "image": photo_url,
+                "rating": max(1, min(5, rating)),
+            }
     image = resolve_ms_url(raw_image, default=_TESTIMONIAL_DEFAULT)
     return {
         "quote": quote,
@@ -54,7 +62,7 @@ def _resolve_testimonial_row(row, *, fallback=None):
 
 
 def get_testimonials(published_only=True, limit=None):
-    qs = Testimonial.objects.all()
+    qs = Testimonial.objects.defer("photo")
     if published_only:
         qs = qs.filter(is_published=True)
     rows = list(qs)

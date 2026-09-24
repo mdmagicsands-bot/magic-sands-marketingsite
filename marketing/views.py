@@ -3,7 +3,8 @@ from django.contrib import messages
 from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
-from django.shortcuts import redirect, render
+from django.http import Http404, HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from . import catalog, content
@@ -103,6 +104,19 @@ def testimonials(request):
         "marketing/testimonials.html",
         _ctx(testimonials=catalog.get_testimonials(), header_color=True),
     )
+
+
+@require_GET
+def testimonial_photo(request, pk: int):
+    """Serve a review photo stored in the database."""
+    obj = get_object_or_404(
+        Testimonial.objects.only("photo", "photo_content_type", "is_published"), pk=pk
+    )
+    if not obj.photo or not (obj.is_published or request.user.is_staff):
+        raise Http404
+    response = HttpResponse(bytes(obj.photo), content_type=obj.photo_content_type or "image/jpeg")
+    response["Cache-Control"] = "public, max-age=3600"
+    return response
 
 
 @require_http_methods(["GET", "POST"])
